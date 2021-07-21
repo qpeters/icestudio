@@ -5,8 +5,10 @@
 
 name: Stable Release
 
-# Manual activation
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */12 * * *'
 
 jobs:
 
@@ -20,167 +22,167 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }} 
     steps:
 
-      # Checkout the master repo branch
-      - name: Checkout!
-        uses: actions/checkout@v2
-        with:
-          ref: master
+    # Checkout the master repo branch
+    - name: Checkout!
+      uses: actions/checkout@v2
+      with:
+        ref: master
 
-      #-- Read the package.json file
-      - name: Read the package.json file
-        id: icestudio_json
-        run: |
-          content=`cat package.json`
-          content="${content//'%'/'%25'}"
-          content="${content//$'\n'/'%0A'}"
-          content="${content//$'\r'/'%0D'}"
-          echo "::set-output name=packageJson::$content"
+    #-- Read the package.json file
+    - name: Read the package.json file
+      id: icestudio_json
+      run: |
+        content=`cat package.json`
+        content="${content//'%'/'%25'}"
+        content="${content//$'\n'/'%0A'}"
+        content="${content//$'\r'/'%0D'}"
+        echo "::set-output name=packageJson::$content"
 
-      # -- Debug: Print the icestudio version
-      - name: Get the Icestudio version
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-        run: |
-          echo "VERSION: ${{ env.VERSION }}"
+    # -- Debug: Print the icestudio version
+    - name: Get the Icestudio version
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+      run: |
+        echo "VERSION: ${{ env.VERSION }}"
 
-      # Install Node 10.17
-      - name: Setup Nodejs version
-        uses: actions/setup-node@v1
-        with:
-          node-version: '10.17'
+    # Install Node 10.17
+    - name: Setup Nodejs version
+      uses: actions/setup-node@v1
+      with:
+        node-version: '10.17'
 
-      - name: Install npm dependencies
-        run:   npm install 
+    - name: Install npm dependencies
+      run:   npm install 
 
-      - name: Install dependencies to build Windows bundle
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y gnupg2 rlwrap software-properties-common binutils cabextract p7zip zenity unrar unzip wget p11-kit-modules:i386 libp11-kit-gnome-keyring:i386 xvfb zstd
-          export DISPLAY=:0.0 
-          wget -qO- https://dl.winehq.org/wine-builds/winehq.key | sudo apt-key add -
-          sudo apt-add-repository 'deb http://dl.winehq.org/wine-builds/ubuntu/ bionic main'
-          wget -qO- https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/Release.key | sudo apt-key add -
-          sudo sh -c 'echo "deb https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/ ./" > /etc/apt/sources.list.d/obs.list'
-          sudo apt-get update
-          sudo apt-get install -y winehq-devel winetricks nsis 
-          export WINEARCH=win32
-          cd /home/runner
-          rm -rf .wine
-          wget -q http://drive16.magnitude.es/wineconf.1804a.tar.zst
-          tar --use-compress-program zstd -xf wineconf.1804a.tar.zst
+    - name: Install dependencies to build Windows bundle
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y gnupg2 rlwrap software-properties-common binutils cabextract p7zip zenity unrar unzip wget p11-kit-modules:i386 libp11-kit-gnome-keyring:i386 xvfb zstd
+        export DISPLAY=:0.0 
+        wget -qO- https://dl.winehq.org/wine-builds/winehq.key | sudo apt-key add -
+        sudo apt-add-repository 'deb http://dl.winehq.org/wine-builds/ubuntu/ bionic main'
+        wget -qO- https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/Release.key | sudo apt-key add -
+        sudo sh -c 'echo "deb https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/ ./" > /etc/apt/sources.list.d/obs.list'
+        sudo apt-get update
+        sudo apt-get install -y winehq-devel winetricks nsis 
+        export WINEARCH=win32
+        cd /home/runner
+        rm -rf .wine
+        wget -q http://drive16.magnitude.es/wineconf.1804a.tar.zst
+        tar --use-compress-program zstd -xf wineconf.1804a.tar.zst
       
-      # -- Build!!
-      - name: Build Linux & Microsoft Windows package
-        run: |
-          export DISPLAY=:0.0 
-          npm run build
+    # -- Build!!
+    - name: Build Linux & Microsoft Windows package
+      run: |
+        export DISPLAY=:0.0 
+        npm run build
 
-      #-- Create the Release
-      - name: Create the Stable Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-        with:
-          tag_name: v${{ env.VERSION }}
-          release_name: v${{ env.VERSION }}
-          body: |
-            A new stable release
-          draft: false
-          prerelease: false
+    #-- Create the Release
+    - name: Create the Stable Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+      with:
+        tag_name: v${{ env.VERSION }}
+        release_name: v${{ env.VERSION }}
+        body: |
+          A new stable release
+        draft: false
+        prerelease: false
 
-      # ---------------------------------------
-      # -- Upload the binaries to the release
-      # ---------------------------------------
-      - name: 'Upload AppImage/linux64'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "dist/icestudio-${{env.VERSION}}-linux64.AppImage"
-          asset_name: "icestudio-${{env.VERSION}}-linux64.AppImage"
-          asset_content_type: application/tar+gzip
+    # ---------------------------------------
+    # -- Upload the binaries to the release
+    # ---------------------------------------
+    - name: 'Upload AppImage/linux64'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: "dist/icestudio-${{env.VERSION}}-linux64.AppImage"
+        asset_name: "icestudio-${{env.VERSION}}-linux64.AppImage"
+        asset_content_type: application/tar+gzip
 
-      - name: 'Upload ZIP/linux64'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-linux64.zip"
-          asset_path: "dist/icestudio-${{env.VERSION}}-linux64.zip"
-          asset_content_type: application/tar+gzip
+    - name: 'Upload ZIP/linux64'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-linux64.zip"
+        asset_path: "dist/icestudio-${{env.VERSION}}-linux64.zip"
+        asset_content_type: application/tar+gzip
 
-      - name: 'Upload AppImage/linux32'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-linux32.AppImage"
-          asset_path: "dist/icestudio-${{env.VERSION}}-linux32.AppImage"
-          asset_content_type: application/tar+gzip
+    - name: 'Upload AppImage/linux32'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-linux32.AppImage"
+        asset_path: "dist/icestudio-${{env.VERSION}}-linux32.AppImage"
+        asset_content_type: application/tar+gzip
 
-      - name: 'Upload ZIP/linux32'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-linux32.zip"
-          asset_path: "dist/icestudio-${{env.VERSION}}-linux32.zip"
-          asset_content_type: application/tar+gzip
-          
-      - name: 'Upload MSI/win64'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-win64.exe"
-          asset_path: "dist/icestudio-${{env.VERSION}}-win64.exe"
-          asset_content_type: application/tar+gzip
-          
-      - name: 'Upload ZIP/win64'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-win64.zip"
-          asset_path: "dist/icestudio-${{env.VERSION}}-win64.zip"
-          asset_content_type: application/tar+gzip
+    - name: 'Upload ZIP/linux32'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-linux32.zip"
+        asset_path: "dist/icestudio-${{env.VERSION}}-linux32.zip"
+        asset_content_type: application/tar+gzip
+        
+    - name: 'Upload MSI/win64'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-win64.exe"
+        asset_path: "dist/icestudio-${{env.VERSION}}-win64.exe"
+        asset_content_type: application/tar+gzip
+        
+    - name: 'Upload ZIP/win64'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-win64.zip"
+        asset_path: "dist/icestudio-${{env.VERSION}}-win64.zip"
+        asset_content_type: application/tar+gzip
 
-      - name: 'Upload MSI/win32'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-win32.exe"
-          asset_path: "dist/icestudio-${{env.VERSION}}-win32.exe"
-          asset_content_type: application/tar+gzip
-          
-      - name: 'Upload ZIP/win32'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-win32.zip"
-          asset_path: "dist/icestudio-${{env.VERSION}}-win32.zip"
-          asset_content_type: application/tar+gzip
+    - name: 'Upload MSI/win32'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-win32.exe"
+        asset_path: "dist/icestudio-${{env.VERSION}}-win32.exe"
+        asset_content_type: application/tar+gzip
+        
+    - name: 'Upload ZIP/win32'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-win32.zip"
+        asset_path: "dist/icestudio-${{env.VERSION}}-win32.zip"
+        asset_content_type: application/tar+gzip
 
   # Build for macos
   build-macos:
@@ -191,48 +193,48 @@ jobs:
     runs-on: macos-latest
     steps:
      
-      - name: Checkout the master repo branch
-        uses: actions/checkout@v2
-        with:
-          ref: master
-      
-      - name: Setup Nodejs version
-        uses: actions/setup-node@v1
-        with:
-          node-version: '10.17'
-      - name: Install npm dependencies
-        run:   npm install 
-      - name: Build OSX packages
-        run:  | 
-          npm run build
-          ls dist/
-          
-       # Loading vars from icestudio package.json
-      - id: icestudio_json
-        run: |
-          content=`tr '\n' ' ' < package.json`
-          echo "::set-output name=packageJson::$content"  
+    - name: Checkout the master repo branch
+      uses: actions/checkout@v2
+      with:
+        ref: master
+    
+    - name: Setup Nodejs version
+      uses: actions/setup-node@v1
+      with:
+        node-version: '10.17'
+    - name: Install npm dependencies
+      run:   npm install 
+    - name: Build OSX packages
+      run:  | 
+        npm run build
+        ls dist/
+        
+     # Loading vars from icestudio package.json
+    - id: icestudio_json
+      run: |
+        content=`tr '\n' ' ' < package.json`
+        echo "::set-output name=packageJson::$content"  
 
-      # Upload the binaries to the release 
-      - name: 'Upload DMG/OSX64'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # -- The upload url is read from the previous job: build-LinWin
-          upload_url: ${{ needs.build-LinWin.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-osx64.dmg"
-          asset_path: "dist/icestudio-${{env.VERSION}}-osx64.dmg"
-          asset_content_type: application/tar+gzip
+    # Upload the binaries to the release 
+    - name: 'Upload DMG/OSX64'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        # -- The upload url is read from the previous job: build-LinWin
+        upload_url: ${{ needs.build-LinWin.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-osx64.dmg"
+        asset_path: "dist/icestudio-${{env.VERSION}}-osx64.dmg"
+        asset_content_type: application/tar+gzip
 
-      - name: 'Upload ZIP/OSX64'
-        uses: actions/upload-release-asset@v1
-        env:
-          VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.build-LinWin.outputs.upload_url }}
-          asset_name: "icestudio-${{env.VERSION}}-osx64.zip"
-          asset_path: "dist/icestudio-${{env.VERSION}}-osx64.zip"
-          asset_content_type: application/tar+gzip
+    - name: 'Upload ZIP/OSX64'
+      uses: actions/upload-release-asset@v1
+      env:
+        VERSION: "${{fromJson(steps.icestudio_json.outputs.packageJson).version}}"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.build-LinWin.outputs.upload_url }}
+        asset_name: "icestudio-${{env.VERSION}}-osx64.zip"
+        asset_path: "dist/icestudio-${{env.VERSION}}-osx64.zip"
+        asset_content_type: application/tar+gzip
